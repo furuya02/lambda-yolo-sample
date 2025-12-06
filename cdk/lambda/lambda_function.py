@@ -11,6 +11,9 @@ from typing import Dict, Any, List
 
 import cv2
 import numpy as np
+# 【YOLO推論の最適化 前】import不要
+# import torch
+# 【YOLO推論の最適化 後】torch.inference_mode()を使用するため
 import torch
 from PIL import Image
 from ultralytics import YOLO
@@ -34,9 +37,13 @@ def initialize_model() -> YOLO:
         model_name = os.environ.get("MODEL_NAME", "/opt/ml/model/best.pt")
 
         print(f"Initializing YOLO model: {model_name}")
+        # 【YOLO推論の最適化 前】
         model = YOLO(model_name)
-        model.fuse()  # レイヤーをfuse（10-20%高速化）
-        print("YOLO model loaded and fused successfully")
+        print("YOLO model loaded successfully")
+        # 【YOLO推論の最適化 後】レイヤーをfuse（10-20%高速化）
+        # model = YOLO(model_name)
+        # model.fuse()
+        # print("YOLO model loaded and fused successfully")
 
     return model
 
@@ -69,14 +76,14 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
     return image_bgr
 
 
-def encode_image_to_base64(image: np.ndarray, format: str = "JPEG", quality: int = 85) -> str:
+# 【画像エンコード形式 前】
+def encode_image_to_base64(image: np.ndarray, format: str = "PNG") -> str:
     """
     画像(numpy配列)をBase64文字列にエンコード
 
     Args:
         image: OpenCV形式の画像 (BGR, numpy.ndarray)
         format: 出力フォーマット ("PNG" or "JPEG")
-        quality: JPEG品質 (1-100、デフォルト85)
 
     Returns:
         str: Base64エンコードされた画像文字列
@@ -89,16 +96,45 @@ def encode_image_to_base64(image: np.ndarray, format: str = "JPEG", quality: int
 
     # バイトストリームに書き込み
     buffer = BytesIO()
-    if format == "JPEG":
-        image_pil.save(buffer, format=format, quality=quality)
-    else:
-        image_pil.save(buffer, format=format)
+    image_pil.save(buffer, format=format)
     buffer.seek(0)
 
     # Base64エンコード
     image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
 
     return image_base64
+
+# 【画像エンコード形式 後】JPEG形式で圧縮率を上げエンコード時間を98%削減
+# def encode_image_to_base64(image: np.ndarray, format: str = "JPEG", quality: int = 85) -> str:
+#     """
+#     画像(numpy配列)をBase64文字列にエンコード
+#
+#     Args:
+#         image: OpenCV形式の画像 (BGR, numpy.ndarray)
+#         format: 出力フォーマット ("PNG" or "JPEG")
+#         quality: JPEG品質 (1-100、デフォルト85)
+#
+#     Returns:
+#         str: Base64エンコードされた画像文字列
+#     """
+#     # BGR -> RGB変換
+#     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+#
+#     # PIL Imageに変換
+#     image_pil = Image.fromarray(image_rgb)
+#
+#     # バイトストリームに書き込み
+#     buffer = BytesIO()
+#     if format == "JPEG":
+#         image_pil.save(buffer, format=format, quality=quality)
+#     else:
+#         image_pil.save(buffer, format=format)
+#     buffer.seek(0)
+#
+#     # Base64エンコード
+#     image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
+#
+#     return image_base64
 
 
 def process_yolo_detection(
@@ -123,16 +159,27 @@ def process_yolo_detection(
     yolo_model = initialize_model()
 
     # YOLO推論を実行（時間計測）
+    # 【YOLO推論の最適化 前】
     inference_start = time.time()
-    with torch.inference_mode():  # 推論モードで高速化
-        results = yolo_model(
-            image,
-            conf=conf_threshold,
-            iou=iou_threshold,
-            verbose=False
-        )
+    results = yolo_model(
+        image,
+        conf=conf_threshold,
+        iou=iou_threshold,
+        verbose=False
+    )
     inference_end = time.time()
     timing['inference_ms'] = (inference_end - inference_start) * 1000
+    # 【YOLO推論の最適化 後】推論モードで勾配計算を無効化して高速化
+    # inference_start = time.time()
+    # with torch.inference_mode():
+    #     results = yolo_model(
+    #         image,
+    #         conf=conf_threshold,
+    #         iou=iou_threshold,
+    #         verbose=False
+    #     )
+    # inference_end = time.time()
+    # timing['inference_ms'] = (inference_end - inference_start) * 1000
 
     # 結果を描画（時間計測）
     plot_start = time.time()

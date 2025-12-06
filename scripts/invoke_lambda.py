@@ -71,8 +71,6 @@ def invoke_lambda_function(
         "image": image_base64
     }
 
-    print(f"Lambda関数 '{function_name}' を呼び出しています...")
-
     # 実行時間の計測開始
     start_time = time.time()
 
@@ -131,7 +129,6 @@ def main() -> None:
         sys.exit(1)
 
     # 画像をBase64エンコード
-    print(f"画像を読み込んでいます: {args.image}")
     image_base64 = encode_image_to_base64(str(image_path))
 
     # Lambda関数を呼び出し
@@ -153,12 +150,8 @@ def main() -> None:
         body = json.loads(response["body"])
 
         # 検出結果を表示
-        print("\n" + "="*60)
-        print("検出結果:")
-        print("="*60)
-
         summary = body.get("summary", {})
-        print(f"\n総検出数: {summary.get('total_detections', 0)}")
+        print(f"総検出数: {summary.get('total_detections', 0)}")
         print(f"検出されたクラス: {', '.join(summary.get('classes_detected', []))}")
 
         print("\n詳細:")
@@ -173,18 +166,22 @@ def main() -> None:
             annotated_image_base64 = body.get("annotatedImage")
             if annotated_image_base64:
                 decode_base64_to_image(annotated_image_base64, args.save_result)
-                print(f"\n検出結果画像を保存しました: {args.save_result}")
 
         # Lambda実行時間と推論時間を表示
-        inference_time_ms = body.get("inference_time_ms", 0)
         timing_breakdown = body.get("timing_breakdown", {})
 
-        print(f"\nLambda実行時間: {elapsed_ms:.2f} ミリ秒")
-        print(f"推論処理時間: {inference_time_ms:.2f} ミリ秒")
+        print(f"\nLambda呼び出し時間: {elapsed_ms:.2f} ms")
 
         # 処理時間の内訳を表示
         if timing_breakdown:
-            print("\n処理時間の内訳:")
+            # 計測合計を先に計算
+            total_measured = (
+                timing_breakdown.get('decode_ms', 0) +
+                timing_breakdown.get('yolo_total_ms', 0) +
+                timing_breakdown.get('encode_ms', 0) +
+                timing_breakdown.get('summary_ms', 0)
+            )
+            print(f"Lambda内の計測: {total_measured:.2f} ms")
             print(f"  Base64デコード: {timing_breakdown.get('decode_ms', 0):.2f} ms")
             print(f"  YOLO処理合計: {timing_breakdown.get('yolo_total_ms', 0):.2f} ms")
             print(f"    - 推論: {timing_breakdown.get('inference_ms', 0):.2f} ms")
@@ -193,20 +190,9 @@ def main() -> None:
             print(f"  Base64エンコード: {timing_breakdown.get('encode_ms', 0):.2f} ms")
             print(f"  サマリー作成: {timing_breakdown.get('summary_ms', 0):.2f} ms")
 
-            # 合計と差分を計算
-            total_measured = (
-                timing_breakdown.get('decode_ms', 0) +
-                timing_breakdown.get('yolo_total_ms', 0) +
-                timing_breakdown.get('encode_ms', 0) +
-                timing_breakdown.get('summary_ms', 0)
-            )
+            # 差分を計算
             other_time = elapsed_ms - total_measured
             print(f"  その他（オーバーヘッド等）: {other_time:.2f} ms")
-            print(f"  計測合計: {total_measured:.2f} ms")
-
-        print("\n" + "="*60)
-        print("処理が完了しました")
-        print("="*60)
 
     except Exception as e:
         print(f"エラーが発生しました: {str(e)}")
