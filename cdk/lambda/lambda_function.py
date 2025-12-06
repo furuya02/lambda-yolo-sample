@@ -5,11 +5,13 @@ YOLOv8を使った物体検出のサンプル実装
 import json
 import base64
 import os
+import time
 from io import BytesIO
 from typing import Dict, Any, List
 
 import cv2
 import numpy as np
+import torch
 from PIL import Image
 from ultralytics import YOLO
 
@@ -33,7 +35,8 @@ def initialize_model() -> YOLO:
 
         print(f"Initializing YOLO model: {model_name}")
         model = YOLO(model_name)
-        print("YOLO model loaded successfully")
+        model.fuse()  # レイヤーをfuse（10-20%高速化）
+        print("YOLO model loaded and fused successfully")
 
     return model
 
@@ -66,13 +69,14 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
     return image_bgr
 
 
-def encode_image_to_base64(image: np.ndarray, format: str = "PNG") -> str:
+def encode_image_to_base64(image: np.ndarray, format: str = "JPEG", quality: int = 85) -> str:
     """
     画像(numpy配列)をBase64文字列にエンコード
 
     Args:
         image: OpenCV形式の画像 (BGR, numpy.ndarray)
         format: 出力フォーマット ("PNG" or "JPEG")
+        quality: JPEG品質 (1-100、デフォルト85)
 
     Returns:
         str: Base64エンコードされた画像文字列
@@ -85,7 +89,10 @@ def encode_image_to_base64(image: np.ndarray, format: str = "PNG") -> str:
 
     # バイトストリームに書き込み
     buffer = BytesIO()
-    image_pil.save(buffer, format=format)
+    if format == "JPEG":
+        image_pil.save(buffer, format=format, quality=quality)
+    else:
+        image_pil.save(buffer, format=format)
     buffer.seek(0)
 
     # Base64エンコード
@@ -98,7 +105,7 @@ def process_yolo_detection(
     image: np.ndarray,
     conf_threshold: float = 0.25,
     iou_threshold: float = 0.45
-) -> tuple[np.ndarray, List[Dict[str, Any]]]:
+) -> tuple[np.ndarray, List[Dict[str, Any]], Dict[str, float]]:
     """
     YOLO物体検出を実行
 
@@ -108,23 +115,33 @@ def process_yolo_detection(
         iou_threshold: IoUの閾値
 
     Returns:
-        tuple[np.ndarray, List[Dict]]: (検出結果画像, 検出オブジェクトリスト)
+        tuple[np.ndarray, List[Dict], Dict[str, float]]: (検出結果画像, 検出オブジェクトリスト, 処理時間内訳)
     """
+    timing = {}
+
     # モデルを取得
     yolo_model = initialize_model()
 
-    # YOLO推論を実行
-    results = yolo_model(
-        image,
-        conf=conf_threshold,
-        iou=iou_threshold,
-        verbose=False
-    )
+    # YOLO推論を実行（時間計測）
+    inference_start = time.time()
+    with torch.inference_mode():  # 推論モードで高速化
+        results = yolo_model(
+            image,
+            conf=conf_threshold,
+            iou=iou_threshold,
+            verbose=False
+        )
+    inference_end = time.time()
+    timing['inference_ms'] = (inference_end - inference_start) * 1000
 
-    # 結果を描画
+    # 結果を描画（時間計測）
+    plot_start = time.time()
     annotated_image = results[0].plot()
+    plot_end = time.time()
+    timing['plot_ms'] = (plot_end - plot_start) * 1000
 
-    # 検出されたオブジェクトのリストを作成
+    # 検出されたオブジェクトのリストを作成（時間計測）
+    detection_list_start = time.time()
     detections = []
     for box in results[0].boxes:
         detection = {
@@ -134,8 +151,10 @@ def process_yolo_detection(
             "bbox": box.xyxy[0].tolist()  # [x1, y1, x2, y2]
         }
         detections.append(detection)
+    detection_list_end = time.time()
+    timing['detection_list_ms'] = (detection_list_end - detection_list_start) * 1000
 
-    return annotated_image, detections
+    return annotated_image, detections, timing
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -177,6 +196,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         print("Lambda function started")
         print(f"Event keys: {event.keys()}")
 
+        # 処理時間の内訳を記録
+        timing_breakdown = {}
+
         # 入力パラメータを取得
         if "image" not in event:
             return {
@@ -195,30 +217,49 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         print(f"Confidence threshold: {conf_threshold}")
         print(f"IoU threshold: {iou_threshold}")
 
-        # Base64デコード
+        # Base64デコード（時間計測）
         print("Decoding base64 image...")
+        decode_start = time.time()
         image = decode_base64_image(image_base64)
+        decode_end = time.time()
+        timing_breakdown['decode_ms'] = (decode_end - decode_start) * 1000
         print(f"Image shape: {image.shape}")
+        print(f"Decode time: {timing_breakdown['decode_ms']:.2f} ms")
 
         # YOLO物体検出を実行
         print("Processing image with YOLO...")
-        annotated_image, detections = process_yolo_detection(
+        yolo_start = time.time()
+        annotated_image, detections, yolo_timing = process_yolo_detection(
             image,
             conf_threshold=conf_threshold,
             iou_threshold=iou_threshold
         )
+        yolo_end = time.time()
+        timing_breakdown['yolo_total_ms'] = (yolo_end - yolo_start) * 1000
+        timing_breakdown.update(yolo_timing)  # inference_ms, plot_ms, detection_list_ms
         print(f"Total detections: {len(detections)}")
+        print(f"YOLO total time: {timing_breakdown['yolo_total_ms']:.2f} ms")
+        print(f"  - Inference: {yolo_timing['inference_ms']:.2f} ms")
+        print(f"  - Plot: {yolo_timing['plot_ms']:.2f} ms")
+        print(f"  - Detection list: {yolo_timing['detection_list_ms']:.2f} ms")
 
-        # 検出結果画像をBase64エンコード
+        # 検出結果画像をBase64エンコード（時間計測）
         print("Encoding annotated image to base64...")
+        encode_start = time.time()
         annotated_image_base64 = encode_image_to_base64(annotated_image)
+        encode_end = time.time()
+        timing_breakdown['encode_ms'] = (encode_end - encode_start) * 1000
+        print(f"Encode time: {timing_breakdown['encode_ms']:.2f} ms")
 
-        # サマリー情報を作成
+        # サマリー情報を作成（時間計測）
+        summary_start = time.time()
         classes_detected = list(set([d["class_name"] for d in detections]))
         summary = {
             "total_detections": len(detections),
             "classes_detected": classes_detected
         }
+        summary_end = time.time()
+        timing_breakdown['summary_ms'] = (summary_end - summary_start) * 1000
 
         # レスポンスを返す
         response = {
@@ -226,11 +267,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "body": json.dumps({
                 "annotatedImage": annotated_image_base64,
                 "detections": detections,
-                "summary": summary
+                "summary": summary,
+                "inference_time_ms": yolo_timing['inference_ms'],
+                "timing_breakdown": timing_breakdown
             })
         }
 
         print("Lambda function completed successfully")
+        print(f"Timing breakdown: {timing_breakdown}")
         return response
 
     except Exception as e:

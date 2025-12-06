@@ -1,5 +1,5 @@
 # AWS Lambda用Dockerイメージ
-# Python 3.11ベース
+# Python 3.11ベース (x86_64)
 
 FROM public.ecr.aws/lambda/python:3.11
 
