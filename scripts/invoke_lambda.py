@@ -170,7 +170,7 @@ def main() -> None:
         # Lambda実行時間と推論時間を表示
         timing_breakdown = body.get("timing_breakdown", {})
 
-        print(f"\nLambda呼び出し時間: {elapsed_ms:.2f} ms")
+        print(f"\n総処理時間: {elapsed_ms:.2f} ms")
 
         # 処理時間の内訳を表示
         if timing_breakdown:
@@ -181,18 +181,18 @@ def main() -> None:
                 timing_breakdown.get('encode_ms', 0) +
                 timing_breakdown.get('summary_ms', 0)
             )
-            print(f"Lambda内の計測: {total_measured:.2f} ms")
-            print(f"  Base64デコード: {timing_breakdown.get('decode_ms', 0):.2f} ms")
-            print(f"  YOLO処理合計: {timing_breakdown.get('yolo_total_ms', 0):.2f} ms")
-            print(f"    - 推論: {timing_breakdown.get('inference_ms', 0):.2f} ms")
-            print(f"    - 結果描画: {timing_breakdown.get('plot_ms', 0):.2f} ms")
-            print(f"    - 検出リスト作成: {timing_breakdown.get('detection_list_ms', 0):.2f} ms")
-            print(f"  Base64エンコード: {timing_breakdown.get('encode_ms', 0):.2f} ms")
-            print(f"  サマリー作成: {timing_breakdown.get('summary_ms', 0):.2f} ms")
+            print(f"   Lambda内の計測: {total_measured:.2f} ms")
+            print(f"      Base64デコード: {timing_breakdown.get('decode_ms', 0):.2f} ms")
+            print(f"      YOLO処理合計: {timing_breakdown.get('yolo_total_ms', 0):.2f} ms")
+            print(f"         - 推論: {timing_breakdown.get('inference_ms', 0):.2f} ms")
+            print(f"         - 結果描画: {timing_breakdown.get('plot_ms', 0):.2f} ms")
+            print(f"         - 検出リスト作成: {timing_breakdown.get('detection_list_ms', 0):.2f} ms")
+            print(f"      Base64エンコード: {timing_breakdown.get('encode_ms', 0):.2f} ms")
+            print(f"      サマリー作成: {timing_breakdown.get('summary_ms', 0):.2f} ms")
 
             # 差分を計算
             other_time = elapsed_ms - total_measured
-            print(f"  その他（オーバーヘッド等）: {other_time:.2f} ms")
+            print(f"   その他（オーバーヘッド等）: {other_time:.2f} ms")
 
     except Exception as e:
         print(f"エラーが発生しました: {str(e)}")

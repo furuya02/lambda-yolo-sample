@@ -14,22 +14,29 @@ import numpy as np
 # 【YOLO推論の最適化 前】import不要
 # import torch
 # 【YOLO推論の最適化 後】torch.inference_mode()を使用するため
-import torch
+# import torch
 from PIL import Image
 from ultralytics import YOLO
+
+# 【オーバーヘッド最適化 後】必要最小限のモジュールのみグローバルインポート、他は遅延インポート
+# import os
+# from typing import Dict, Any, List
 
 
 # グローバル変数（コールドスタート対策）
 model = None
 
 
-def initialize_model() -> YOLO:
+def initialize_model():
     """
     YOLOモデルを初期化（初回のみ実行）
 
     Returns:
         YOLO: YOLOv8モデルインスタンス
     """
+    # 【オーバーヘッド最適化 後】遅延インポート
+    # from ultralytics import YOLO
+
     global model
 
     if model is None:
@@ -37,9 +44,15 @@ def initialize_model() -> YOLO:
         model_name = os.environ.get("MODEL_NAME", "/opt/ml/model/best.pt")
 
         print(f"Initializing YOLO model: {model_name}")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
+
         # 【YOLO推論の最適化 前】
         model = YOLO(model_name)
         print("YOLO model loaded successfully")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
+
         # 【YOLO推論の最適化 後】レイヤーをfuse（10-20%高速化）
         # model = YOLO(model_name)
         # model.fuse()
@@ -48,7 +61,7 @@ def initialize_model() -> YOLO:
     return model
 
 
-def decode_base64_image(base64_string: str) -> np.ndarray:
+def decode_base64_image(base64_string: str):
     """
     Base64文字列を画像(numpy配列)にデコード
 
@@ -58,6 +71,13 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
     Returns:
         np.ndarray: OpenCV形式の画像 (BGR, numpy.ndarray)
     """
+    # 【オーバーヘッド最適化 後】遅延インポート
+    # import base64
+    # import numpy as np
+    # import cv2
+    # from io import BytesIO
+    # from PIL import Image
+
     # Base64デコード
     image_bytes = base64.b64decode(base64_string)
 
@@ -77,7 +97,7 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
 
 
 # 【画像エンコード形式 前】
-def encode_image_to_base64(image: np.ndarray, format: str = "PNG") -> str:
+def encode_image_to_base64(image, format: str = "PNG") -> str:
     """
     画像(numpy配列)をBase64文字列にエンコード
 
@@ -88,6 +108,12 @@ def encode_image_to_base64(image: np.ndarray, format: str = "PNG") -> str:
     Returns:
         str: Base64エンコードされた画像文字列
     """
+    # 【オーバーヘッド最適化 後】遅延インポート
+    # import base64
+    # import cv2
+    # from io import BytesIO
+    # from PIL import Image
+
     # BGR -> RGB変換
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
@@ -138,10 +164,10 @@ def encode_image_to_base64(image: np.ndarray, format: str = "PNG") -> str:
 
 
 def process_yolo_detection(
-    image: np.ndarray,
+    image,
     conf_threshold: float = 0.25,
     iou_threshold: float = 0.45
-) -> tuple[np.ndarray, List[Dict[str, Any]], Dict[str, float]]:
+):
     """
     YOLO物体検出を実行
 
@@ -153,6 +179,9 @@ def process_yolo_detection(
     Returns:
         tuple[np.ndarray, List[Dict], Dict[str, float]]: (検出結果画像, 検出オブジェクトリスト, 処理時間内訳)
     """
+    # 【オーバーヘッド最適化 後】遅延インポート
+    # import time
+
     timing = {}
 
     # モデルを取得
@@ -204,7 +233,7 @@ def process_yolo_detection(
     return annotated_image, detections, timing
 
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def lambda_handler(event, context):
     """
     Lambda関数ハンドラー - シンプルYOLOサンプル
 
@@ -239,9 +268,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             }
     """
+    # 【オーバーヘッド最適化 後】遅延インポート
+    # import time
     try:
+        # 【オーバーヘッド最適化 後】orjsonを使用（標準jsonより2-3倍高速）
+        # import orjson
+
         print("Lambda function started")
         print(f"Event keys: {event.keys()}")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
 
         # 処理時間の内訳を記録
         timing_breakdown = {}
@@ -263,18 +299,26 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         print(f"Confidence threshold: {conf_threshold}")
         print(f"IoU threshold: {iou_threshold}")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
 
         # Base64デコード（時間計測）
         print("Decoding base64 image...")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
         decode_start = time.time()
         image = decode_base64_image(image_base64)
         decode_end = time.time()
         timing_breakdown['decode_ms'] = (decode_end - decode_start) * 1000
         print(f"Image shape: {image.shape}")
         print(f"Decode time: {timing_breakdown['decode_ms']:.2f} ms")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
 
         # YOLO物体検出を実行
         print("Processing image with YOLO...")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
         yolo_start = time.time()
         annotated_image, detections, yolo_timing = process_yolo_detection(
             image,
@@ -289,14 +333,20 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         print(f"  - Inference: {yolo_timing['inference_ms']:.2f} ms")
         print(f"  - Plot: {yolo_timing['plot_ms']:.2f} ms")
         print(f"  - Detection list: {yolo_timing['detection_list_ms']:.2f} ms")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
 
         # 検出結果画像をBase64エンコード（時間計測）
         print("Encoding annotated image to base64...")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
         encode_start = time.time()
         annotated_image_base64 = encode_image_to_base64(annotated_image)
         encode_end = time.time()
         timing_breakdown['encode_ms'] = (encode_end - encode_start) * 1000
         print(f"Encode time: {timing_breakdown['encode_ms']:.2f} ms")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
 
         # サマリー情報を作成（時間計測）
         summary_start = time.time()
@@ -319,9 +369,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "timing_breakdown": timing_breakdown
             })
         }
+        # 【オーバーヘッド最適化 後】orjsonを使用（標準jsonより2-3倍高速）
+        # "body": orjson.dumps({
+        #     "annotatedImage": annotated_image_base64,
+        #     "detections": detections,
+        #     "summary": summary,
+        #     "inference_time_ms": yolo_timing['inference_ms'],
+        #     "timing_breakdown": timing_breakdown
+        # }).decode("utf-8")
 
         print("Lambda function completed successfully")
         print(f"Timing breakdown: {timing_breakdown}")
+        # 【オーバーヘッド最適化 後】CloudWatch Logsへの出力オーバーヘッドを削減
+        # 上記print文をコメントアウト
         return response
 
     except Exception as e:
@@ -336,3 +396,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "type": type(e).__name__
             })
         }
+        # 【オーバーヘッド最適化 後】orjsonを使用（標準jsonより2-3倍高速）
+        # "body": orjson.dumps({
+        #     "error": str(e),
+        #     "type": type(e).__name__
+        # }).decode("utf-8")

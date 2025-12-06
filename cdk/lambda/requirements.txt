@@ -11,6 +11,9 @@ opencv-python-headless>=4.8.0
 numpy>=1.24.0
 Pillow>=10.0.0
 
+# 【オーバーヘッド最適化 後】高速JSONシリアライズ（標準jsonより2-3倍高速）
+# orjson>=3.9.0
+
 # PyTorch (CPU版 - Lambda環境用)
 # Note: Dockerfileでインストールするため、ここではコメントアウト
 # torch>=2.0.0
