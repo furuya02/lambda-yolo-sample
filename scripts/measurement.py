@@ -2,7 +2,7 @@
 """
 Lambda関数のパフォーマンス計測スクリプト
 
-11回実行してコールドスタート（1回目）を除いた10回分の平均値を計算
+31回実行してコールドスタート（1回目）を除いた30回分の平均値を計算
 """
 import sys
 import time
@@ -169,7 +169,7 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Lambda関数のパフォーマンス計測（11回実行、1回目除外）"
+        description="Lambda関数のパフォーマンス計測（31回実行、1回目除外）"
     )
     parser.add_argument(
         "--image",
@@ -193,8 +193,8 @@ def main() -> None:
         "--runs",
         "-n",
         type=int,
-        default=11,
-        help="実行回数（デフォルト: 11）"
+        default=31,
+        help="実行回数（デフォルト: 31）"
     )
 
     args = parser.parse_args()

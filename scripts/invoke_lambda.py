@@ -48,9 +48,7 @@ def decode_base64_to_image(base64_string: str, output_path: str) -> None:
 
 
 def invoke_lambda_function(
-    function_name: str,
-    image_base64: str,
-    region: str = "ap-northeast-1"
+    function_name: str, image_base64: str, region: str = "ap-northeast-1"
 ) -> Tuple[Dict[str, Any], float]:
     """
     Lambda関数を呼び出す
@@ -67,9 +65,7 @@ def invoke_lambda_function(
     lambda_client = boto3.client("lambda", region_name=region)
 
     # リクエストペイロードを作成
-    payload = {
-        "image": image_base64
-    }
+    payload = {"image": image_base64}
 
     # 実行時間の計測開始
     start_time = time.time()
@@ -78,7 +74,7 @@ def invoke_lambda_function(
     response = lambda_client.invoke(
         FunctionName=function_name,
         InvocationType="RequestResponse",
-        Payload=json.dumps(payload)
+        Payload=json.dumps(payload),
     )
 
     # レスポンスを解析
@@ -96,29 +92,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Lambda関数を呼び出してYOLO物体検出を実行"
     )
-    parser.add_argument(
-        "--image",
-        "-i",
-        required=True,
-        help="入力画像のパス"
-    )
+    parser.add_argument("--image", "-i", required=True, help="入力画像のパス")
     parser.add_argument(
         "--function-name",
         "-f",
         default="yolo-sample",
-        help="Lambda関数名 (デフォルト: yolo-sample)"
+        help="Lambda関数名 (デフォルト: yolo-sample)",
     )
     parser.add_argument(
         "--region",
         "-r",
         default="ap-northeast-1",
-        help="AWSリージョン (デフォルト: ap-northeast-1)"
+        help="AWSリージョン (デフォルト: ap-northeast-1)",
     )
-    parser.add_argument(
-        "--save-result",
-        "-s",
-        help="検出結果画像の保存先パス"
-    )
+    parser.add_argument("--save-result", "-s", help="検出結果画像の保存先パス")
 
     args = parser.parse_args()
 
@@ -136,13 +123,15 @@ def main() -> None:
         response, elapsed_ms = invoke_lambda_function(
             function_name=args.function_name,
             image_base64=image_base64,
-            region=args.region
+            region=args.region,
         )
 
         # ステータスコードを確認
         status_code = response.get("statusCode", 500)
         if status_code != 200:
-            print(f"エラー: Lambda関数がエラーを返しました (status code: {status_code})")
+            print(
+                f"エラー: Lambda関数がエラーを返しました (status code: {status_code})"
+            )
             print(json.dumps(response, indent=2, ensure_ascii=False))
             sys.exit(1)
 
@@ -176,18 +165,26 @@ def main() -> None:
         if timing_breakdown:
             # 計測合計を先に計算
             total_measured = (
-                timing_breakdown.get('decode_ms', 0) +
-                timing_breakdown.get('yolo_total_ms', 0) +
-                timing_breakdown.get('encode_ms', 0) +
-                timing_breakdown.get('summary_ms', 0)
+                timing_breakdown.get("decode_ms", 0)
+                + timing_breakdown.get("yolo_total_ms", 0)
+                + timing_breakdown.get("encode_ms", 0)
+                + timing_breakdown.get("summary_ms", 0)
             )
             print(f"   Lambda内の計測: {total_measured:.2f} ms")
-            print(f"      Base64デコード: {timing_breakdown.get('decode_ms', 0):.2f} ms")
-            print(f"      YOLO処理合計: {timing_breakdown.get('yolo_total_ms', 0):.2f} ms")
+            print(
+                f"      Base64デコード: {timing_breakdown.get('decode_ms', 0):.2f} ms"
+            )
+            print(
+                f"      YOLO処理合計: {timing_breakdown.get('yolo_total_ms', 0):.2f} ms"
+            )
             print(f"         - 推論: {timing_breakdown.get('inference_ms', 0):.2f} ms")
             print(f"         - 結果描画: {timing_breakdown.get('plot_ms', 0):.2f} ms")
-            print(f"         - 検出リスト作成: {timing_breakdown.get('detection_list_ms', 0):.2f} ms")
-            print(f"      Base64エンコード: {timing_breakdown.get('encode_ms', 0):.2f} ms")
+            print(
+                f"         - 検出リスト作成: {timing_breakdown.get('detection_list_ms', 0):.2f} ms"
+            )
+            print(
+                f"      Base64エンコード: {timing_breakdown.get('encode_ms', 0):.2f} ms"
+            )
             print(f"      サマリー作成: {timing_breakdown.get('summary_ms', 0):.2f} ms")
 
             # 差分を計算
@@ -197,6 +194,7 @@ def main() -> None:
     except Exception as e:
         print(f"エラーが発生しました: {str(e)}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
