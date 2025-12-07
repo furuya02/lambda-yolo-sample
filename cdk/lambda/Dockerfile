@@ -1,7 +1,10 @@
 # AWS Lambda用Dockerイメージ
 # Python 3.11ベース (x86_64)
 
+# 【ARM64への変更 前】
 FROM public.ecr.aws/lambda/python:3.11
+# 【ARM64への変更 後】コスト削減を狙うがYOLO推論が遅くなるため非推奨
+#FROM public.ecr.aws/lambda/python:3.11-arm64
 
 # 作業ディレクトリ
 WORKDIR /var/task

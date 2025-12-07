@@ -2,6 +2,28 @@
 
 AWS LambdaでYOLOv8を使った物体検出を行うシンプルなサンプルプロジェクトです。
 
+## 現在の実装状態
+
+本プロジェクトは**ベース実装**の状態で提供されています。
+パフォーマンス最適化の試行錯誤の履歴は、ソースコード内にコメントとして保存されており、必要に応じて有効化することができます。
+
+### ベース構成
+- **Lambda メモリ**: 3GB (3008 MB)
+- **アーキテクチャ**: x86_64
+- **JSON処理**: 標準json
+- **インポート方式**: グローバルインポート
+- **ログ**: CloudWatch Logs有効（print文あり）
+
+### 最適化履歴
+過去に試行された最適化はコメントで保存:
+- メモリ増量（3GB → 10GB）
+- YOLO推論最適化（model.fuse(), torch.inference_mode()）
+- 画像エンコード形式変更（PNG → JPEG quality=85）
+- ARM64アーキテクチャ変更
+- オーバーヘッド削減（print文削減、orjson、遅延インポート）
+
+詳細は [lambda_function.py](cdk/lambda/lambda_function.py) および [cdk-stack.ts](cdk/lib/cdk-stack.ts) のコメントを参照してください。
+
 ## プロジェクト構成
 
 ```
@@ -19,7 +41,8 @@ lambda-yolo-sample/
 │   ├── tsconfig.json
 │   └── cdk.json
 ├── scripts/                  # テストスクリプト
-│   ├── invoke_lambda.py     # Lambda呼び出しスクリプト
+│   ├── invoke_lambda.py     # Lambda呼び出しスクリプト（単発テスト）
+│   ├── measurement.py       # パフォーマンス計測スクリプト（31回実行）
 │   └── requirements.txt     # スクリプト用依存関係
 └── README.md
 ```
@@ -72,7 +95,7 @@ pip install -r requirements.txt
 
 ## 使い方
 
-### Lambda関数の呼び出し
+### Lambda関数の呼び出し（単発テスト）
 
 ```bash
 cd scripts
@@ -91,16 +114,27 @@ python invoke_lambda.py --image path/to/your/image.jpg --function-name your-func
 python invoke_lambda.py --image path/to/your/image.jpg --region us-east-1
 ```
 
-### 出力例
+### パフォーマンス計測（31回実行）
+
+```bash
+cd scripts
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# デフォルト設定（31回実行、1回目除外して30回平均）
+python measurement.py --image path/to/your/image.jpg
+
+# 実行回数を変更
+python measurement.py --image path/to/your/image.jpg --runs 51
+
+# 関数名とリージョンを指定
+python measurement.py --image path/to/your/image.jpg \
+  --function-name your-function-name \
+  --region us-east-1
+```
+
+### 出力例（invoke_lambda.py）
 
 ```
-画像を読み込んでいます: sample.jpg
-Lambda関数 'yolo-sample' を呼び出しています...
-
-============================================================
-検出結果:
-============================================================
-
 総検出数: 3
 検出されたクラス: person, car, dog
 
@@ -118,25 +152,54 @@ Lambda関数 'yolo-sample' を呼び出しています...
       信頼度: 0.723
       位置: [50.2, 300.1, 150.8, 420.5]
 
-検出結果画像を保存しました: result.jpg
+総処理時間: 718.56 ms
+   Lambda内の計測: 413.75 ms
+      Base64デコード: 4.23 ms
+      YOLO処理合計: 63.71 ms
+         - 推論: 49.15 ms
+         - 結果描画: 14.39 ms
+         - 検出リスト作成: 0.15 ms
+      Base64エンコード: 342.28 ms
+      サマリー作成: 0.01 ms
+   その他（オーバーヘッド等）: 304.81 ms
+```
 
-Lambda実行時間: 263.26 ミリ秒
-推論処理時間: 49.15 ミリ秒
+※ 処理時間の内訳は階層的インデントで表示されます。
+※ 「総処理時間」はクライアント側で計測したLambda呼び出しのラウンドトリップ時間です。
+※ 「その他（オーバーヘッド等）」は、ネットワーク遅延やJSON処理など、Lambda内で計測されていない時間です。
 
-処理時間の内訳:
-  Base64デコード: 4.23 ms
-  YOLO処理合計: 63.71 ms
-    - 推論: 49.15 ms
-    - 結果描画: 14.39 ms
-    - 検出リスト作成: 0.15 ms
-  Base64エンコード: 3.53 ms
-  サマリー作成: 0.01 ms
-  その他（オーバーヘッド等）: 191.78 ms
-  計測合計: 71.48 ms
+### 出力例（measurement.py）
+
+```
+Lambda関数を31回実行します...
+============================================================
+
+[1/31] 実行中... 完了（コールドスタート - 集計対象外）
+[2/31] 実行中... 完了（718.56 ms）
+[3/31] 実行中... 完了（712.34 ms）
+...
+[31/31] 実行中... 完了（715.89 ms）
 
 ============================================================
-処理が完了しました
+
+集計: 30回の平均値を計算
+
 ============================================================
+計測結果（平均値）
+============================================================
+総処理時間: 716.23 ms
+   Lambda内の計測: 412.45 ms
+      Base64デコード: 4.18 ms
+      YOLO処理合計: 63.52 ms
+         - 推論: 49.03 ms
+         - 結果描画: 14.35 ms
+         - 検出リスト作成: 0.14 ms
+      Base64エンコード: 341.89 ms
+      サマリー作成: 0.01 ms
+   その他（オーバーヘッド等）: 303.78 ms
+============================================================
+
+全体の実行時間: 45.23 秒
 ```
 
 ## Lambda関数のAPI仕様
